@@ -70,3 +70,28 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
   - 详见上游 `release-notes.md`。
 - 校验命令不变（见上）；桌面端依赖源仍为本仓库 tarball。
 - 回滚：若新基线异常，旧版备份 `node_modules\dsh-purge.bak-20261026-plus143`（1.4.3）仍可用。
+
+## 2026-10-31 修复：0.2.1-rc.5 宿主 Apply/自动重打后崩溃
+
+- **现象**：rc.5 宿主上点 dsh-purge「应用」（Apply）或 settle 检测到补丁丢失自动重打后，
+  Electron 弹 `dsh desktop host stopped` 崩溃框，宿主永久停摆（16:44 / 17:01 两次实测，
+  crash 栈均为 `resources/app.asar/lib/main.js:3845`，且 `app.asar` 未被挪走、无 relaunch）。
+- **根因（本机实证）**：`restartOfficialHarness` 的 plan 恒选 `powershell` 分支——本机
+  `powershell.exe` detached spawn **挂起不执行脚本**（实测 12s+ 无输出），且 `cscript` 报
+  **"没有文件扩展名 .js 的脚本引擎"**（JScript 引擎失效）→ `wshJsEngineWorks()` 探针必失败。
+  于是 Apply 后 PowerShell 交换脚本写了但从未执行：宿主进程被杀/退出，`app.asar` 没挪走、
+  桌面没 relaunch → Electron main 把 host 退出当崩溃弹窗，宿主死透。
+- **修复（commit 33d91ee）**：
+  - `lib/desktop.js` `restartOfficialHarness`：win32 + 官方 exe 直接走纯 Node helper
+    `restart-desktop.js`（先杀 Electron → `moveAsarAside` 挪走 `app.asar` → `execPath --updated`
+    relaunch + 前台恢复），不再依赖 PowerShell / JScript 引擎；`exitAfter: 1500` 给足
+    helper 启动+杀进程时间，host 退出时 Electron 已死，不再弹崩溃框。
+  - `sealedSwapKind()` 统一返回 `"helper"`，`scheduleAsarSwapRestart` 同样不会再选中
+    PowerShell 分支。
+  - helper 重启链路 2026-10-29 已在本机实测成功；本次修复后 2026-10-31 实测：
+    模拟 Apply 重启 → `app.asar` 挪走、补丁版 `resources/app` 启动、5 进程 160s 稳定、
+    **0 新增 crash**。
+- **验证方式**：Apply/自动重打后检查 `%TEMP%\dsh-purge-restart-desktop.log` 出现
+  `asar moved to ...` + `relaunched via execPath`，且 `resources\app.asar` 被挪走
+  （`app.asar.bak` 出现）、宿主从 `resources\app` 正常启动、无新 `crash-*` 日志。
+- **回滚**：`lib/desktop.js` 备份为 `lib/desktop.js.bak-20261031-prefix`（修前原版）。
