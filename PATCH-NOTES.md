@@ -323,3 +323,17 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
   写终态后同一条文案不会被判两次改写，审计与二次 apply 都能自洽。宿主现行文本已经是这个终态，无需重打。
 - 审计结论落档 `docs/patch-audit-2026-11-07.md`：86 条补丁、367 条 verdict、220 OK、硬缺口 0、
   语法错误 0、重复插入 0；`needsReview` 仅 #40/#80/#83（前两者为补丁链改写与撤销型，非故障）。
+## 2026-11-07 #94 glob/grep 容忍 rg exit 2（1.1.97）
+
+- 现象：新会话分析项目时 `Error: glob search failed (exit 2): rg: … IO error … 拒绝访问。 (os error 5)`，
+  与搜索条件无关，整个调用失败、结果全丢。
+- 根因：`@deepseek-ai/dsh-tool-fs-search/lib/index.js` 的 `runRipgrep()` 把 `exitCode ∉ {0,1}` 一律
+  throw `SEARCH_FAILED`，已收集的 stdout 全部丢弃。而 rg 的 exit 2 只表示遍历期出错
+  （Windows 上一个 ACL 拒绝访问的目录就够），stdout 里仍是有效的逐行结果。
+  glob 还带 `--no-ignore --hidden`，所以 `.gitignore` 里的目录也会被遍历，撞上 denied 目录的概率更高。
+- 修法：新增 `dshPurgeToleratesTraversalError()`，仅当 exit=2 **且** stdout 非空 **且** stderr 不是
+  正则/glob 解析错误时按部分结果返回；stdout 为空或 pattern 被拒仍走原硬失败，exit 0/1 语义不变。
+  glob 与 grep 共用 `runRipgrep()`，因此两者同时生效。
+- 验证：在真实项目复现 exit 2 + 335 条结果，打补丁后的判定返回 true；空 stdout / pattern 错误 /
+  exit 1 三种边界仍按原语义拒绝；宿主文件 `node --check` 通过；单测 85/85；审计 gaps 0。
+- 生效：`--apply` 后需重启 DSH（工具包在主进程启动时加载）。
