@@ -189,4 +189,49 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
 - **0.2.2 桌面版只开 inspector `127.0.0.1:9230`，不再自动开 web UI**（无 `6218x` 端口）。
   用工具验证界面时注意：要么重启时把 stdout 重定向（日志里才会有 `dsh web: http://127.0.0.1:<port>/?token=...`），
   要么直接在桌面窗口里看。无交互桌面会话下 `cu.screenshot()` 会报 `NO_SESSION / Unable to capture the interactive desktop`。
-- 遗留：shim 未重建（0.2.2 无 CLI）；beta lane 空；上游 `skills/redteam/*.md` 尚未整包并入。
+- 遗留：shim 未重建（0.2.2 无 CLI）；beta lane 空。上游 `skills/redteam/*.md` 已并入（见下节）。
+
+## 2026-11-07 修复 #82 / #80（1.1.94）
+
+### #82 DESKTOP_SHELL_PROFILE_FALLBACK 一直没打上
+
+- 根因：补丁锚点是「import 行 + `//#region ../../packages/util/home-paths/lib/index.js` 两行相邻」。
+  0.2.2 的 `resources\app\lib\main.js` 里 import 在第 18 行，region 注释已挪到第 1722 行，
+  两行不再相邻 → pattern 永远不命中。desktop 面报 drifted，CLI 面因 `surface=web` 直接判 `na`，
+  用户看到的就是"跳过"。
+- 改法：新增找到 import 单行的锚点（`expect: 1` 防重复命中），把兜底语句插在 import 之后；
+  保留旧的"两行相邻"pattern 作为 0.2.1 及更早宿主回退。
+  插入位置在 `import ... stream-protocol` 与后续 bundled 代码之间，属顶层语句，ESM 合法。
+- 验证：`DSH_SURFACE=desktop node bin\dsh-purge.js --apply` → `✓ 已清洗 patch #82`；
+  `lib/main.js` 第 19–22 行出现 4 行注释 + `process.env.DSH_PROFILE ||= desktop` 兜底；
+  `main.js.dshpurge.bak` 已生成；二次 apply 后 marker 计数仍为 1（不叠加）；
+  `node --check`（拷成 .mjs）退出码 0。
+
+### #80 MINIMAL_OFFICIAL_TOOLSET 显示 skipped
+
+- 根因：这条是"撤销型"补丁，pattern 全是本插件以前写进宿主 preset 的痕迹
+  （`# [dsh-purge] minimal fs tool parity` 等）。0.2.2 的官方 minimal 表本来就只有
+  `tool-fs`（`read:false/readImage:true/write:false/edit:false`），没有 `tool-fs-search` / `tool-web`，
+  所以一条 pattern 都不命中；`filePatchOutcome` 对这种自标记补丁返回 `skipped`，
+  状态页就把它显示成"跳过"，和"打失败了"分不开。
+- 改法：目标状态已达成时按 `applied` 记——
+  `rollupPatchStatus` 增加 `selfMarked` 分支（apply 报告侧），
+  `patchStatus` 对 `filePatchOutcome === "skipped"` 且 `isSelfMarkedPatch(p)` 的补丁记 `applied`（状态页侧）。
+  宿主文件不动，不改官方 preset。
+- 验证：`✓ [#80] MINIMAL_OFFICIAL_TOOLSET 工具/Tools — applied`。
+
+### 顺手修的 #92/#93 二次应用叠加
+
+- `DESKTOP_HOST_EXIT_TRACE` / `DESKTOP_MAIN_EXIT_TRACE` 的锚点（close 回调头、
+  `claimDesktopSingleInstance(...)`）在产物里仍然保留，不加 `skipIfMarked` 每次 apply 都再插一遍。
+- 两条补上 `skipIfMarked: true`，靠插入块里的 marker 阻断重复写入。
+- `test/patch-status.test.js` 的幂等用例从红的 3 条（#92/#93 + 两条自相矛盾的 rollup 断言）变为 30/30 全绿；
+  其中两条 rollup 断言按代码里已写明的"漂移压过 applied"口径改正（多文件补丁任一文件漂移即报 drifted）。
+
+### 本次状态口径
+
+| surface | 结果 |
+|---|---|
+| `DSH_SURFACE=desktop` | **80/86 已清洗，0 待清洗，0 漂移**（#80 applied、#82 applied） |
+| `DSH_SURFACE=web`（CLI 默认） | 70/86 已清洗，0 待清洗；#82 因 desktop-only 记 `na`、#80 applied |
+

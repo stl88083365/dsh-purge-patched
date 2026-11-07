@@ -38,14 +38,14 @@ test("rollupPatchStatus: pattern 还在 → pattern_not_found（可以打）", (
   assert.equal(rollupPatchStatus({ ...base, notFound: 1 }), "pattern_not_found");
 });
 
-test("rollupPatchStatus: 有文件真的写成功就仍算 applied，不制造半打假告警", () => {
-  assert.equal(rollupPatchStatus({ ...base, applied: 1, drifted: 1 }), "applied");
+test("rollupPatchStatus: 多文件补丁里只要有一个文件漂移，整体就报 drifted", () => {
+  // 官方升级后常见"一个文件打上、另一个文件被搬走"：这时仍报 applied 会把
+  // 静默失效藏起来，所以 drifted 压过 applied。
+  assert.equal(rollupPatchStatus({ ...base, applied: 1, drifted: 1 }), "drifted");
 });
 
-test("rollupPatchStatus: 已经落盘过的补丁仍算 already，不因个别文件漂移翻红", () => {
-  // 多文件补丁里个别文件本来就不含这段代码（另一个构建产物），
-  // 这种"假漂移"不能盖掉已经打上的部分。
-  assert.equal(rollupPatchStatus({ ...base, already: 1, drifted: 1 }), "already");
+test("rollupPatchStatus: 已落盘 + 另一个文件漂移 → 也报 drifted（不翻绿）", () => {
+  assert.equal(rollupPatchStatus({ ...base, already: 1, drifted: 1 }), "drifted");
 });
 
 test("rollupPatchStatus: 写错误优先于 applied，不能把 EACCES 吞成绿", () => {
@@ -57,6 +57,12 @@ test("rollupPatchStatus: 写错误优先于 applied，不能把 EACCES 吞成绿
 
 test("rollupPatchStatus: 文件全缺 → missing_file", () => {
   assert.equal(rollupPatchStatus({ ...base, missing: 1 }), "missing_file");
+});
+
+test("rollupPatchStatus: 撤销型自标记补丁无痕迹 → already（目标状态已达成，不是 skipped）", () => {
+  // #80 这类"撤掉本插件以前加进去的东西"的补丁，宿主里本来就没有痕迹时，
+  // 正确状态是"无需再动"，不能显示成 skipped。
+  assert.equal(rollupPatchStatus({ ...base, selfMarked: 1 }), "already");
 });
 
 test("filePatchOutcome: 文件在、marker 没有、pattern 一条都不中 → drifted", () => {
