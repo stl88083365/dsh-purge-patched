@@ -5,3 +5,12 @@ Source: https://github.com/YuJunZhiXue/dsh-purge
 
 This product is licensed under the Apache License, Version 2.0.
 Derivative works must retain this NOTICE and attribution.
+
+## Bundled red-team skills
+
+skills/redteam/*.md — 23 Markdown runbooks, from dsh-redteam-mode by Jueze-2019
+(https://github.com/Jueze-2019/dsh-redteam-mode), MIT License, redistributed here
+unchanged. The MIT copyright and permission notice is retained verbatim in
+docs/redteam-upstream-LICENSE; dual-use declaration in docs/redteam-upstream-DISCLOSURE.
+These files are prose instructions for operating tools the user installs themselves;
+they are intended solely for authorized security assessment.
