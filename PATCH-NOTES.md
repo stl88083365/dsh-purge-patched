@@ -313,3 +313,13 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
   因此按"核心意图已达"处理，不再逐句追平。
 - 补丁层 `markersAny` 的设计弱点保留：只要命中任意一个 marker，整条补丁就算 applied，
   官方改写另一句时不会被重打（#12 就是这么漏的）。本轮只修了漏，没有改 apply 语义。
+## 2026-11-07 审计脚本入库 + #61 措辞对齐（1.1.96）
+
+- 新增 `scripts/audit-patches.mjs`（`npm run audit:patches`）：逐条 replacement 判定 + 全量语法检查 +
+  重复插入检查，可 `--json` 落结构化数据；`gaps`（真没打）与 `needsReview`（补丁链改写导致字面对不上）分开报。
+  脚本已修掉历史坑：`targetFiles()` 有些键返回字符串单路径，必须 `norm()` 归一，否则会逐字符读文件刷假红。
+- `#61 OFFICIAL_SANDBOX_POLICY_NEUTRAL` 的 replace 改成终态措辞（直接写 `Current file policy: read-only. …`）：
+  `#89 SANDBOX_POLICY_BRAND_NEUTRAL` 本来就会把 `Current DSH file policy: ` 改成 `Current file policy: `，
+  写终态后同一条文案不会被判两次改写，审计与二次 apply 都能自洽。宿主现行文本已经是这个终态，无需重打。
+- 审计结论落档 `docs/patch-audit-2026-11-07.md`：86 条补丁、367 条 verdict、220 OK、硬缺口 0、
+  语法错误 0、重复插入 0；`needsReview` 仅 #40/#80/#83（前两者为补丁链改写与撤销型，非故障）。
