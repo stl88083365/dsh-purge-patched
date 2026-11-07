@@ -95,3 +95,98 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
   `asar moved to ...` + `relaunched via execPath`，且 `resources\app.asar` 被挪走
   （`app.asar.bak` 出现）、宿主从 `resources\app` 正常启动、无新 `crash-*` 日志。
 - **回滚**：`lib/desktop.js` 备份为 `lib/desktop.js.bak-20261031-prefix`（修前原版）。
+
+## 2026-11-07 适配：DSH 0.2.2-rc.1 + 一键更新切自库（1.1.93）
+
+### 宿主升级（0.2.1-rc.5 -> 0.2.2-rc.1）
+
+- 更新源是官方 nightly feed：`https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml`
+  （GitHub release 只有源码包，不含 Windows 安装包）。安装包
+  `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.2-rc.1-win-x64.exe`
+  （293,425,336 B，Authenticode `Valid`，签名者 `CN="Hangzhou DeepSeek Artificial Intelligence Co., Ltd."`）。
+- 静默安装：`installer /S /D=D:\DeepSeek Harness`（exit 0）。安装器会删掉旧的解包目录与
+  `app.asar.bak`，只留 sealed `app.asar`（213,202,918 B）。
+- **0.2.2 的 runtime 已移除 CLI**：`resources\runtime\` 只剩 `office-skills\`，
+  `dsh.cmd` / `dsh.ps1` / `dsh` 全 missing。因此 `shim` 显示 `missing`、
+  `--dump-config` 一类 CLI 验证链不可用，属预期行为，不是故障。
+- sealed asar 解包：`sealedAsarHandoff()` 第一步就 `if (adapterFor(surface) !== "desktop") return null;`，
+  纯 CLI 下 surface 被判为 `web`，**永不解包**。故改用自写脚本直接调底层
+  `lib/extract-asar.js`（绕过 surface 判定）：
+  `C:\Users\lbxp\dsh-update\unpack-022.mjs`，输出
+  `{"count":20519,"overlay":{"copied":1583},"moved":{"renamed":true,"bak":"D:/DeepSeek Harness/resources/app.asar.bak"}}`。
+  宿主自此从 `resources\app` 运行。
+- 回滚宿主：把 `D:\DeepSeek Harness\resources\app.asar.bak` 改名回 `app.asar`，清掉 `resources\app`。
+
+### 0.2.2 把官方包拆分/搬迁——8 条补丁漂移的根因
+
+| 补丁 | 旧目标 | 0.2.2 新位置 |
+|---|---|---|
+| #60 run_code 沙箱话术 | `dsh-tools/lib/types/ptc.js` | `dsh-tool-executor-ptc/lib/types/ptc.js` + `lib/index.js` |
+| #62 工具审批管道 | `dsh-tools/lib/index.js`、`lib/types/index.js` | `dsh-tools/lib/pipeline.js` |
+| #54 交付物提示词 | `dsh-client-ui-deliverables/lib/index.js` | `dsh-deliverable-file-references/lib/index.js` |
+| #74 组装前钩子 | agent-loop `claim` + `assemble(...)` 两行连写 | `claim` 后插了 model 选择与 `tools.resolve`，`assemble` 改对象展开 |
+| #67 messages 守卫 | 4 tab 缩进 | run loop 多包一层 try，变 5 tab |
+| #40 system-prompt 注入 | 早返回 `return transformed` | `return { ...transformed, tools }` |
+| #14 升级授权 | `displayReason: {en,zh}` 内联对象 | `displayReason: escalationDisplayReason(mode, justification)` |
+| #17 观察策略 | `editIntent` 内联读前检查 | `return this.requirePresent(target, actor, "edit")` |
+
+### `lib/core.js` 改动
+
+1. 新增 `firstExistingList(groups)`：按顺序取第一组存在的候选，旧宿主自动回退，
+   避免新旧两份同时进 patch 目标而误判漂移。
+2. `targetFiles` 四个键改写/新增：
+   - `deliverables-prompt` 优先 `dsh-deliverable-file-references/lib/index.js`，回退 `dsh-client-ui-deliverables`
+   - `dsh-tools-ptc` 优先 `dsh-tool-executor-ptc/lib/types/ptc.js`，回退 `dsh-tools/lib/types/ptc.js`
+   - 新增 `dsh-tools-ptc-exec`（`dsh-tool-executor-ptc/lib/index.js` → `dsh-tools/lib/index.js`）
+   - 新增 `tools-pipeline`（`dsh-tools/lib/pipeline.js` → `lib/types/pipeline.js` → `lib/index.js`）
+3. 逐条补 pattern：#14 追加第 3 条、#40 追加第 8 条（正则）、#67 追加 5 tab 版、
+   #74 追加只锚 `const claimed = this.inbox.claim(target, position.turn);` 单行版、
+   #17 追加 `requirePresent` 版；#60 改 `file` 为 `["dsh-tools-ptc-exec","dsh-tools-ptc"]`；
+   #62 改 `file` 为 `["tools-pipeline"]`。
+
+**实测结果**：`--apply` 报告 **69/86 已清洗、0 待清洗、0 漂移**。
+剩余 `na` 均为 desktop-only 项（surface=web 时不适用），`skipped` 仅 #80。
+
+### 一键更新改指自库
+
+- `lib/update.js`：`REPO` → `stl88083365/dsh-purge-patched`，`STABLE_REF` → `main`
+  （用户库默认分支是 main，若仍为 master 则 codeload 会 404）。`BETA_REF = "beta"` 未动，
+  自库无 beta 分支，测试版 lane 会一直为空。
+- `client.js` 两处 `welcome.repo` 同步改自库地址。
+- `package.json`：version `1.1.93`（高于上游最高 1.1.92，避免混淆）；
+  `repository/homepage/bugs` → 自库；`dsh.install.tarball` →
+  `https://codeload.github.com/stl88083365/dsh-purge-patched/tar.gz/refs/heads/main`，
+  `zip` → `.../zip/refs/heads/main`，`git` → 自库 `.git`；
+  `dshTarget: "0.2.2-rc.1"`，`dshTargets: ["0.2.2-rc.1","0.2.1-rc.2","0.2.1-rc.5"]`。
+- **端到端验证**（直接调插件 `checkUpdate()`）：
+  `{"ok":true,"hasUpdate":false,"updateTarget":"main","localVersion":"1.1.93",
+  "remoteVersion":"1.1.85","remoteSha":"3e10abb","via":"mixed"}` ——
+  请求确实打在自库 main，远端仍是未推送前的 1.1.85。
+
+### 基线合并：本地安装版 1.1.90 整体作为基线
+
+上游 master 仍是 1.1.85 / `dshTarget: 0.2.1-rc.2`，其最新 release 1.1.92 全库 grep `0.2.2` 零命中，
+**上游没有任何 0.2.2 支持**，0.2.2 适配只能自写。因此不整体同步上游，而是把本机安装的
+1.1.90（= 上游 1.1.86→1.1.90 全部改进 + rc.5 helper 修复）整体作为基线写入本仓库：
+`robocopy /E /XD node_modules .github /XF "*.bak-*"`。
+
+由此并入的上游优点（不逐条 cherry-pick）：
+
+- 1.1.92 随包 `skills/redteam/*.md`（23 条红队技能，`files` 增 `skills`，NOTICE 注明来源）；
+- 1.1.91 `dshTargets` 双版本声明、`writeHostFileAtomic()` 保留 POSIX mode、
+  回退按钮 `place()` 可见性判定 + 宿主 z-index 下调、`rewritePnpmAllowBuilds()` 按 pnpm 大版本分策略；
+- 1.1.90 撤销按钮改 `createPortal` 挂 body（根治"输入框整块消失"）；
+- 1.1.89 工作目录提示用会话真实 cwd（`interpolate:false`）+ `assembly.variables` 补 `cwd`、
+  桌面静默退出可诊断（`%TEMP%\dsh-purge-desktop.log`）、`atomicWriteFile` 保持 writeFile+rename、
+  重复标记负向前瞻改幂等；
+- 1.1.88 双版本适配 rc.2 + rc.5。
+
+### 本机验证与遗留
+
+- 插件目录同步：仓库 → `C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge`
+  （排除 `.git` / `node_modules` / `*.bak-*`），宿主重启后 5 进程稳定、无新 `crash-*` 日志。
+- 插件加载硬证据：宿主 13:51:14 启动，`C:\Users\lbxp\.dsh\dsh-purge\last-cwd.txt` 于 13:51:31 被写入。
+- **0.2.2 桌面版只开 inspector `127.0.0.1:9230`，不再自动开 web UI**（无 `6218x` 端口）。
+  用工具验证界面时注意：要么重启时把 stdout 重定向（日志里才会有 `dsh web: http://127.0.0.1:<port>/?token=...`），
+  要么直接在桌面窗口里看。无交互桌面会话下 `cu.screenshot()` 会报 `NO_SESSION / Unable to capture the interactive desktop`。
+- 遗留：shim 未重建（0.2.2 无 CLI）；beta lane 空；上游 `skills/redteam/*.md` 尚未整包并入。
