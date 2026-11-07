@@ -337,3 +337,20 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
 - 验证：在真实项目复现 exit 2 + 335 条结果，打补丁后的判定返回 true；空 stdout / pattern 错误 /
   exit 1 三种边界仍按原语义拒绝；宿主文件 `node --check` 通过；单测 85/85；审计 gaps 0。
 - 生效：`--apply` 后需重启 DSH（工具包在主进程启动时加载）。
+## 2026-11-07 #95 primary-runtime ENOENT 兜底（1.1.98）
+
+- 现象：`Error: ENOENT: no such file or directory, open 'D:\DeepSeek Harness\resources\runtime\primary-runtime\runtime.json'`
+- 根因：0.2.2-rc.1 安装包的 `resources\runtime` 下只带 `office-skills`，`primary-runtime` 整个缺失；
+  而 desktop 启动 host 时把 `source` 写死成这个路径（`main.js` L20273 → host argv[4] →
+  `dsh-desktop-host` L596），`dsh-tool-workspace-dependencies.readPrimaryRuntime(source)` 直接 ENOENT。
+  `load_workspace_dependencies` 是懒加载，所以只有真正去取 Office / Python 路径时才炸。
+- 已装 payload：`~/.dsh/dsh-runtimes/dsh-primary-runtime`（257.6 MB，manifest `desktopVersion 0.2.1-rc.5`，
+  python 3.12.14 / node 24.21.0 / pnpm 11.28.5 + 13 个 python 包）。manifest 相同时
+  `installPrimaryRuntime` 只做校验、不复制，所以回退到它是零成本的。
+- 修法：desktop-host 组装 office 插件配置时先判断 `source` / `root` 谁有 `runtime.json`，
+  把 `workspace_dependencies` 的 `source` 换成有效那份；`assetRoot` 仍指向安装目录的 `office-skills`，
+  office 用的 `node` 跟随实际 payload。两边都没有时维持原行为（报原错误）。
+- 验证：直接调真实模块 `installPrimaryRuntime` —— 原样路径复现同一条 ENOENT；
+  兜底路径返回 python / node / pnpm 三个绝对路径且都 `existsSync`；打补丁后的选择逻辑四组用例符合预期；
+  宿主 `node --check` 0；单测 85/85；审计 gaps 0。
+- 生效：重启 DSH。
