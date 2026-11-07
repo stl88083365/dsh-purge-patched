@@ -235,3 +235,81 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
 | `DSH_SURFACE=desktop` | **80/86 已清洗，0 待清洗，0 漂移**（#80 applied、#82 applied） |
 | `DSH_SURFACE=web`（CLI 默认） | 70/86 已清洗，0 待清洗；#82 因 desktop-only 记 `na`、#80 applied |
 
+
+## 2026-11-07 全量补丁真实性审计（1.1.95）
+
+用户要求"检查其他的补丁正确性"。审计口径不是"marker 在不在"，而是逐条 replacement 判定：
+插入型看新增行是否全部落盘、改写型看原文是否已被换掉、删除型看残留是否清零，
+再对全部被补丁动过的宿主文件跑 `node --check` / `JSON.parse`。
+
+### 审计脚本自身的两轮错判（先说清楚，避免误读历史结论）
+
+- v1：把 `targetFiles()` 的某些键当成数组遍历，但 `escalation` / `tool-fs` / `subagent` 等键
+  返回的是**字符串单路径**，`for (const fp of 字符串)` 变成了逐字符读文件，
+  于是"读不到"被记成"内容未落盘"，跑出 92 条假 `payload_missing`。结论作废。
+- v2：补了插入/删除型识别，但仍残留同一处字符串误读，仍是半成品。
+- v3（最终）：`const fps = Array.isArray(v) ? v : v ? [v] : []` + 只审 `existsSync` 的真实候选，
+  才得到可用数据。
+
+### 最终数据（desktop 面）
+
+| 指标 | 值 |
+|---|---|
+| 补丁总数 | 86 |
+| `syntaxErrors` | 0（所有被改过的 `.js` 都过 `node --check`，`.json` 都过 `JSON.parse`） |
+| `PATTERN_LEFT` | 0（没有"原文还在、替换没写进去"的改写型） |
+| `LEFTOVER` | 0（没有删除型残留） |
+| `NOT_APPLIED` | 137 条 verdict |
+| `INSERT_INCOMPLETE` | 1 条 verdict |
+
+这 137 条 `NOT_APPLIED` **绝大多数不是故障**：同一补丁的多条 replacement 是
+"不同宿主版本的写法变体"（0.1.5 数值 schema / 0.1.7 union / 0.2 provider-managed 等），
+命中任一即算落地；再叠加官方 0.2.2 改写措辞（`undefined`→`void 0`、文案换句）与
+"replace 里只有半句"这类字面差异，逐条按字面比对必然刷出大片红。
+
+按"同一补丁同一文件、任一 replacement 命中即落地"合并后，只剩 5 条需要人工定性：
+
+| # | 补丁 | 取证结论 |
+|---|---|---|
+| 80 | MINIMAL_OFFICIAL_TOOLSET | 自标记撤销型，本来就没加过 → 正常（已按 applied 记） |
+| 83 | DESKTOP_HOST_CLOSE_NO_FATAL | 已落地：`main.js` L10055 `signal kill` / L10057 `close no-fail v2` |
+| 61 | OFFICIAL_SANDBOX_POLICY_NEUTRAL | 已落地：`dsh-sandbox-policy` L87 已是 `Current file policy: read-only. … approval is auto-granted` + purge 注释；对不上只是期望写的是旧措辞 `Current DSH file policy` |
+| 40 | COMPLETE_PROMPT_KEEP_INJECT | 已落地：`dsh-system-prompt` L402–L413 有 `dsh-purge` 段落分流 + `every mode keeps system inject`；`INSERT_INCOMPLETE` 是拿另一版变体比对的假红 |
+| 12 | APPROVAL_ASK_SENTENCE_BYPASS | **真实未落地**（见下） |
+
+### #12 真实未落地：ask 提示句还是官方原文
+
+- 0.2.2 把 ask 句开头从 `Approval policy: ask.` 改成了
+  `Approval prompts are enabled in this session:`，旧 pattern 永不命中；
+  而这条补丁是 `markersAny`，被别的标记喂绿，状态页一直显示 applied。
+- 后果：模型在 ask 策略下被文案告知"会弹审批"，会绕道去问，与插件实际"自动放行"相反。
+- 改法：在 #12 增加一条锚 0.2.2 新措辞的 replacement（bare 文本，双引号/单引号两种宿主写法都能命中），
+  旧 pattern 保留给 0.2.1 及更早宿主。替换文案保持"auto-granted in this session (approval bypass, approval policy: ask)"不变
+  （这条文案本身就在 `markersAny` 里，替换后 marker 自然成立）。
+- 验证：`✓ 已清洗 patch #12`；两处 `ASK_SENTENCE`（`lib/index.js` L41、`lib/types/index.js` L21）
+  均已变为 auto-granted 文案，`node --check` 均退出 0。
+
+> 踩坑记录：第一版 replacement 把 `// [dsh-purge] …` 注释拼在 replace 末尾，
+> 而 pattern 是 bare 文本，注释就落进了字符串字面量（模型看到的话术尾部带着 `// [dsh-purge] …`）。
+> 已去掉注释并手工清掉两个文件里的残留。
+
+### 顺带清掉宿主里的重复插入（#92 / #93 的历史遗留）
+
+- `main.js` 里 `#92` 的 6 行块出现在 L10043–L10048 和 L10049–L10054 两份，
+  `#93` 的 27 行块出现在 L21465–L21491 和 L21492–L21518 两份 —— 都是加 `skipIfMarked` 之前
+  重复 apply 留下的。`skipIfMarked` 只防"再插一次"，不会清掉已经插了两份的现状。
+- 处理：按整块逐行相等判定后删掉第二份，共删除 33 行；`main.js.dedupe.bak` 留底；
+  删后 `node --check main.js` 退出 0，`[dsh-purge]` 行不再有重复项。
+- 影响面：只影响 `%TEMP%\dsh-purge-desktop.log` 的重复行数与重复注册的退出回调，
+  不影响启动链路。
+
+### 审计边界（未做的事，明确写在这里）
+
+- 没有做运行时行为验证：0.2.2 桌面版不自开 web UI，`cu.screenshot()` 在本机报 `NO_SESSION`，
+  程序化 GUI 通道不可用；本轮的证据都是"宿主源码 + 落盘文本"级别。
+- `#33 TOOL_SHELL_DENIAL_PROMPT` / `#36 TOOL_FS_ESCALATION_SCHEMA` 是"多句追加型"，
+  0.2.2 重写工具描述后部分句子不再命中（本次 audit 里 9/22、7/24），
+  但工具描述里已经存在中性的 `Approval is auto-granted.` 措辞，可见文案已是中性，
+  因此按"核心意图已达"处理，不再逐句追平。
+- 补丁层 `markersAny` 的设计弱点保留：只要命中任意一个 marker，整条补丁就算 applied，
+  官方改写另一句时不会被重打（#12 就是这么漏的）。本轮只修了漏，没有改 apply 语义。
