@@ -354,3 +354,22 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
   兜底路径返回 python / node / pnpm 三个绝对路径且都 `existsSync`；打补丁后的选择逻辑四组用例符合预期；
   宿主 `node --check` 0；单测 85/85；审计 gaps 0。
 - 生效：重启 DSH。
+## 2026-11-07 撤回 #95，改用官方布局补齐 primary-runtime（1.1.99）
+
+- 结论：`#95`（改 `dsh-desktop-host` 的 `source` 兜底）不符合「只做目录/文件适配、不改官方主文件」这条约束，
+  已整体撤回：宿主 `dsh-desktop-host/lib/index.js` 用备份还原（SHA-256 与备份一致，24579 B，`node --check` 0），
+  备份文件随后删除，补丁表移除 `#95`、`targetFiles` 一并删掉 `desktop-host` 键。
+- 根因不变：0.2.2-rc.1 安装包 `resources\runtime` 下只有 `office-skills`，`primary-runtime` 整个缺失；
+  desktop 启动 host 时把 `source` 写死成 `<resources>\runtime\primary-runtime`（`main.js` L20273 → argv[4] → host L596），
+  `dsh-tool-workspace-dependencies.readPrimaryRuntime(source)` 因此 ENOENT。
+- 适配方式（不碰官方代码）：把已装在 `~/.dsh/dsh-runtimes/dsh-primary-runtime` 的 payload
+  （257.6 MB / 6157 files / manifest `0.2.1-rc.5`）补到 `D:\DeepSeek Harness\resources\runtime\primary-runtime`。
+  官方 `installPrimaryRuntime` 比对 manifest 相同后只做校验、不再复制，home 那份继续当已装副本，
+  最终状态与官方设计一致（bundled source + home install）。
+- 新增 `scripts/relocate-primary-runtime.mjs`（`npm run fix:runtime`）：默认复制、`--move` 移动、`--dry-run` 预览，
+  `DSH_BASE` 可指定安装目录；幂等，重装/更新后再跑一次即可复原。
+- 验证：官方模块 `readPrimaryRuntime(新路径)` 解析出完整 manifest；
+  `installPrimaryRuntime(新路径, home)` 返回的 python / node / pnpm / site-packages 全部存在；
+  脚本在临时 home + base 上跑通复制分支；单测 85/85；审计 `patches 87 / gaps [] / syntaxErrors 0 / duplicates 0`；
+  desktop 81/87、web 70/87，均 0 待清洗，`#95` 已不在列表。
+- 生效：目录已在位，下次 `load_workspace_dependencies` 直接可用；重启 DSH 非必需。
