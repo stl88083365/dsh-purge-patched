@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH Purge",
+    "description": "Context purge and red-team drill console: cleans the session context and mounts the drill dock above the chat."
+  }
+}
