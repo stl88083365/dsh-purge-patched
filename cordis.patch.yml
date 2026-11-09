@@ -30,30 +30,11 @@
     personaPrefix: ""
     personaSuffix: ""
 
-# 本体 insert 写在用户层 profile/cordis.patch.yml（postinstall / 演练台自愈补）。
-# 这里只改已入队条目的 inject/config。再 insert 一次会 already queued（#152 / #154 / #159）。
-- id: dsh-purge
-  name: dsh-purge
-  inject: [systemPrompt, tools]
-  config:
-    enabled: true
-    autoApplyOnStart: false
-    autoUpdateOnStart: false
-    autoRevertOnMissing: false
-    injectOnce: false
-    stripMnemon: true
-    verbose: false
-    postPrompt: ""
-    postPromptOrder: 5100
-    autoRetry: true
-    retryMax: 3
-    autoContinue: false
-    continueMax: 3
-    continueText: "继续"
-    capabilityProtocol: true
-    hooksDenyBypass: true
-    anchorMode: auto
-    subagentControl: true
+# 本体行（dsh-purge-profile）只由用户层 profile/cordis.patch.yml 的 insert 提供，
+# 这里不再写同 id 的 overlay：宿主的插件开关按行 id 往用户层写
+# `- id: <id> / disabled: true|false`，两层共用同一个 id 时，关一次会连 overlay 一起关掉，
+# 表现成插件被自己关掉、UI 静默消失（#152 / #154 / #159 / #192）。
+# 本体行的 inject/config 现由 insert 自身携带，见 lib/profile-insert.js 的 INSERT_BLOCK。
 
 - insert:
     # 演练台：预设 + 技能落地（本插件 lib/redteam）
