@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.2.2</strong></p>
+<p align="center"><strong>Version 1.2.3</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -131,7 +131,7 @@ This repo is [Apache License 2.0](./LICENSE). Forks and redistributions must kee
 
 ## Supported hosts
 
-> This fork is at **1.2.2**. Treat `package.json` -> `dshTargets` as the source of truth (`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`). The 1.1.81 notes below are upstream history.
+> This fork is at **1.2.3**. Treat `package.json` -> `dshTargets` as the source of truth (`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`). The 1.1.81 notes below are upstream history.
 
 **1.1.81 targets DSH 0.2.1-rc.2.** 0.2.0 still works. Do not apply it to 0.1.x.
 
@@ -210,7 +210,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 - On the desktop client you can also click the button (`dsh://` deep link; it still downloads the same tarball).
 
 <p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.2.2&repo=stl88083365%2Fdsh-purge-patched&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fstl88083365%2Fdsh-purge-patched%2Ftar.gz%2Frefs%2Fheads%2Fmaster"><strong>Install in desktop client</strong></a>
+  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.2.3&repo=stl88083365%2Fdsh-purge-patched&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fstl88083365%2Fdsh-purge-patched%2Ftar.gz%2Frefs%2Fheads%2Fmaster"><strong>Install in desktop client</strong></a>
 </p>
 
 **Step 3 — Restart the host.** Adding the plugin to a profile does **not** patch `@deepseek-ai` by itself. Fully quit and reopen the host you just installed into (Web: stop `dsh web` and start again; Desktop: quit the tray icon too, then open the exe).

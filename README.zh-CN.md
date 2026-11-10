@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.2.2</strong></p>
+<p align="center"><strong>Version 1.2.3</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -133,7 +133,7 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 ## 适配范围
 
-> 本仓库当前 **1.2.2**，以 `package.json` 的 `dshTargets` 为准（`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`）。下面 1.1.81 的说明是上游历史文本。
+> 本仓库当前 **1.2.3**，以 `package.json` 的 `dshTargets` 为准（`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`）。下面 1.1.81 的说明是上游历史文本。
 
 **1.1.81 已适配 DSH 0.2.1-rc.2**，0.2.0 仍可用。不要拿它去打 0.1.x。
 
@@ -212,7 +212,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 - 桌面客户端也可以点按钮（`dsh://` 唤起，下的仍是同一份压缩包）。
 
 <p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.2.2&repo=stl88083365%2Fdsh-purge-patched&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fstl88083365%2Fdsh-purge-patched%2Ftar.gz%2Frefs%2Fheads%2Fmaster"><strong>唤起客户端一键安装</strong></a>
+  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.2.3&repo=stl88083365%2Fdsh-purge-patched&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fstl88083365%2Fdsh-purge-patched%2Ftar.gz%2Frefs%2Fheads%2Fmaster"><strong>唤起客户端一键安装</strong></a>
 </p>
 
 **第 3 步 —— 重启宿主。** 只把插件写进 profile **还不会**改 `@deepseek-ai`。完全退出再打开刚装的那个宿主（Web：停掉 `dsh web` 再开；桌面：托盘也要退出，再开 exe）。

@@ -131,7 +131,7 @@ Harness は単にプロンプトを転送するだけではありません。プ
 
 ## 対応ホスト
 
-> この fork は **1.2.2**。`package.json` の `dshTargets`（`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`）が正。以下の 1.1.81 記述は上流の履歴です。
+> この fork は **1.2.3**。`package.json` の `dshTargets`（`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`）が正。以下の 1.1.81 記述は上流の履歴です。
 
 **1.1.81 は DSH 0.2.1-rc.2 を対象とします。** 0.2.0 も動作します。0.1.x には適用しないでください。
 
@@ -210,7 +210,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 - デスクトップクライアントではボタンをクリックすることもできます（`dsh://` ディープリンク。同じ tarball をダウンロードします）。
 
 <p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.2.2&repo=stl88083365%2Fdsh-purge-patched&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fstl88083365%2Fdsh-purge-patched%2Ftar.gz%2Frefs%2Fheads%2Fmaster"><strong>デスクトップクライアントでインストール</strong></a>
+  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.2.3&repo=stl88083365%2Fdsh-purge-patched&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fstl88083365%2Fdsh-purge-patched%2Ftar.gz%2Frefs%2Fheads%2Fmaster"><strong>デスクトップクライアントでインストール</strong></a>
 </p>
 
 **ステップ 3 — ホストを再起動する。** プラグインをプロファイルに追加しただけでは、`@deepseek-ai` にパッチは当たりません。インストールしたホストを完全に終了して再起動します（Web: `dsh web` を停止して起動し直す。デスクトップ: トレイアイコンも終了してから exe を開く）。
