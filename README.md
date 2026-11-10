@@ -131,6 +131,8 @@ This repo is [Apache License 2.0](./LICENSE). Forks and redistributions must kee
 
 ## Supported hosts
 
+> This fork is at **1.2.2**. Treat `package.json` -> `dshTargets` as the source of truth (`0.2.2-rc.1` / `0.2.1-rc.2` / `0.2.1-rc.5`). The 1.1.81 notes below are upstream history.
+
 **1.1.81 targets DSH 0.2.1-rc.2.** 0.2.0 still works. Do not apply it to 0.1.x.
 
 - **dsh 0.2.1-rc.2** (official desktop / official `dsh web`): use **1.1.81**. Fixes `{{cwd}}` / `[cwd]` crash, patch #40 match, dropped `toolFilter`, host `dsh-tools` resolve, hostFs fd, desktop helper self-kill, `file:` archive update, Ctrl+Enter steer.

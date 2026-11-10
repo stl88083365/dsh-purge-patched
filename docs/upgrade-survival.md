@@ -69,7 +69,7 @@ Copy-Item "$d\lib\index.js.bak-20261110-p1" "$d\lib\index.js" -Force
 Copy-Item "$d\lib\core.js.bak-20261110-p2" "$d\lib\core.js" -Force
 Remove-Item "$d\lib\inject-channel.js","$d\lib\apply-tx.js","$d\lib\patch-anchor.js","$d\lib\surface-mode.js" -Force
 Remove-Item "$d\scripts\lint-anchors.mjs","$d\scripts\verify-inject.mjs","$d\scripts\doctor.mjs" -Force
-Remove-Item "$d\tests" -Recurse -Force
+Remove-Item "$d\test" -Recurse -Force
 ```
 
 ## 生效条件
