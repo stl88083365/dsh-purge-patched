@@ -373,3 +373,61 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
   脚本在临时 home + base 上跑通复制分支；单测 85/85；审计 `patches 87 / gaps [] / syntaxErrors 0 / duplicates 0`；
   desktop 81/87、web 70/87，均 0 待清洗，`#95` 已不在列表。
 - 生效：目录已在位，下次 `load_workspace_dependencies` 直接可用；重启 DSH 非必需。
+## 2026-11-11 P1-P3 生存层（1.2.2）
+
+宿主升级后插件"还能不能用"此前完全押在 86 条宿主补丁上：补丁漂移 = 破甲消失。
+本次把三层拆开，任何一层失效都不再拖垮整块。
+
+### L0 双通道注入 `lib/inject-channel.js`
+
+- `injectionMode`: `auto`（默认）/ `system` / `user` / `both`。`auto` 读 profile 的
+  `cordis.patch.yml`，默认模型 provider 走 `api: openai-completions|responses` 时用 `both`
+  （这类网关会把 `role=system` 整段重写），否则保持 `system`。
+- user 通道在 `agent/pre-step` 把正文前置到本步最后一条 user 消息，哨兵
+  `dsh-purge:inject:<sha256前16位>` 幂等；只复用同一 step 里 `assemble` 刚算出的正文（20s TTL），
+  不自己重算上下文。
+- 实测：`system` 模式段 20,988B 含内核、0 个 pre-step 回调（与旧行为完全一致）；
+  `user` 模式段为空、user 内容 21,040B 含内核 + 哨兵、原文保留、重复注入 0 次。
+
+### L1 写入事务 `lib/apply-tx.js`
+
+`applyPatches` 写完后统一 `node --check`（JS）/ `JSON.parse`（JSON），坏掉的用
+`.dshpurge.bak` 回滚并把补丁降级为 `drifted`（`drift_reason: syntax_error`）。
+校验器优先用宿主自带 node（`$DSH_HOME/dsh-runtimes/.../node.exe`），Electron 下退
+`ELECTRON_RUN_AS_NODE=1`。默认 6 路并发。
+
+### L1.5 锚点体检 `lib/patch-anchor.js` + `scripts/lint-anchors.mjs`
+
+把 249 个锚点分成结构 / 正则 / 混合 / 文案锚。实测：文案锚 23 个（9.2%），
+含文案锚的补丁 12 条，纯文案锚 0 条（判定 OK）。`--strict` 可当提交门禁。
+
+### L2 适配档位 `lib/surface-mode.js`
+
+`full` / `degraded` / `readonly`。硬条件：宿主不在 `dshTargets`、补丁零落地、
+漂移占比 > 15%。`autoApplyOnStart: true` 时先过闸，非 full 不自动写宿主
+（返回 `skip:surface-degraded`）。状态页新增「适配档位 / mode」与「破甲通道 / injection」两行。
+
+### 取证脚码
+
+- `scripts/verify-inject.mjs`：解 `session.v4.jsonl.zstd`，统计 `system/message` 与
+  `user/message` 里内核命中与哨兵命中。
+  **坑**：Node 24.21 的 `zstdDecompressSync` 只解第一个 zstd 帧（23.9MB 会话只出 211B），
+  必须按帧切分（magic `0xfd2fb528`，照 `dsh-session-persistence-jsonl` 的 scanZstdFrames）。
+- `scripts/doctor.mjs`：一条命令汇总宿主版本 / 档位 / 补丁落地 / 锚点 / 注入通道 / 日志取证，
+  报告写到 `$DSH_HOME/dsh-purge/doctor/doctor-<ts>.md`。
+
+### #71 梁神补丁
+
+- 根因不是开关：梁神（`@linxin666/dsh-liangshen`）没装，`patch_status["71"]="missing_file"`。
+- 原 `targetFiles` 写死四条 `profiles/{web,desktop}/node_modules/...`，pnpm 隔离 store /
+  用户预设目录 / 改名安装全部漏掉。新增 `liangshenPresetFiles()` 扫四类落点，且只保留
+  真的含身份句或已带 marker 的文件（避免把 redteam 等预设拖进 `strictFiles`）。
+- 实测（临时 DSH_HOME 三种布局）：用户预设与 pnpm store 两个目标都命中，诱饵被排除；
+  真补丁打一遍 `changed=true / marker=true / 句子消失 / pending→applied`。
+- 没有标 `optional`：`optional` 会让缺文件落成 `na`，而 `na` 行不进清洗页列表，
+  用户会以为补丁消失。
+
+### 测试
+
+`test/inject-channel.test.js` 15 条 + `test/p2-p3.test.js` 14 条，`npm test` 29/29。
+`scripts/audit-patches.mjs`：87 条补丁 / 54 文件 / 338 verdict / gaps 0 / syntaxErrors 0 / duplicates 0。

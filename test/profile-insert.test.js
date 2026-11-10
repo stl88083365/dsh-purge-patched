@@ -338,14 +338,34 @@ test("非空 flow 序列：宿主内容不动，返回 ok:false", () => {
   assert.equal(fs.readFileSync(fp, "utf8"), original);
 });
 
-test("已有 dsh-purge 本体行：零写入", () => {
+test("旧 id 本体行：迁移一次成规范块，第二次零写入", () => {
+  // #192 之后本体行 id 是 dsh-purge-profile，旧 profile 里的 dsh-purge 行要被规范化
+  // （换 id + 补齐 config），所以第一次必然写盘；关键是不能每次都写。
   const original = "- insert:\n    - id: dsh-purge\n      name: dsh-purge\n";
   const dir = withTempPatch(original);
   const fp = path.join(dir, "cordis.patch.yml");
   const result = ensureProfileBodyInsert(dir);
   assert.equal(result.ok, true);
+  assert.equal(result.wrote, true);
+  assert.equal(result.migrated, true);
+  const migrated = fs.readFileSync(fp, "utf8");
+  assert.equal(migrated.includes("id: dsh-purge-profile"), true);
+  assert.equal(migrated.includes(`        postPromptOrder: 5100`), true);
+
+  const again = ensureProfileBodyInsert(dir);
+  assert.equal(again.wrote, false);
+  assert.equal(fs.readFileSync(fp, "utf8"), migrated);
+});
+
+test("已是规范本体行：零写入", () => {
+  const dir = withTempPatch("[]\n");
+  const fp = path.join(dir, "cordis.patch.yml");
+  assert.equal(ensureProfileBodyInsert(dir).wrote, true);
+  const canonical = fs.readFileSync(fp, "utf8");
+  const result = ensureProfileBodyInsert(dir);
+  assert.equal(result.ok, true);
   assert.equal(result.wrote, false);
-  assert.equal(fs.readFileSync(fp, "utf8"), original);
+  assert.equal(fs.readFileSync(fp, "utf8"), canonical);
 });
 
 test("`[]` 替换后幂等：再 ensure 一次零写入", () => {
