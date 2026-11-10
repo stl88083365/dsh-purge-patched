@@ -11,6 +11,7 @@ import {
   replacementsOf,
 } from "../lib/patch-anchor.js";
 import {
+  ensureBak,
   isCheckableFile,
   resolveNodeBinary,
   restoreFromBak,
@@ -70,6 +71,26 @@ test("apply-tx: 没有备份时只报告，不动文件", async () => {
   assert.equal(tx.broken[0].restored, false);
   assert.equal(tx.broken[0].reason, "no-backup");
   assert.equal(fs.readFileSync(bad, "utf8"), "function ( {\n");
+});
+
+test("apply-tx: ensureBak 只在没有备份时留底，且回滚能还原", async () => {
+  const dir = tmpDir();
+  const fp = path.join(dir, "x.js");
+  fs.writeFileSync(fp, "export const a = 1;\n", "utf8");
+
+  assert.deepEqual(ensureBak(fp), { created: true, reason: "copied" });
+  assert.equal(fs.readFileSync(fp + ".dshpurge.bak", "utf8"), "export const a = 1;\n");
+
+  // 已有备份不覆盖：保留最早那份原版
+  fs.writeFileSync(fp, "export const a = 2;\n", "utf8");
+  assert.deepEqual(ensureBak(fp), { created: false, reason: "exists" });
+  assert.equal(fs.readFileSync(fp + ".dshpurge.bak", "utf8"), "export const a = 1;\n");
+
+  // 写坏 → 校验 → 回滚到原版
+  fs.writeFileSync(fp, "export const a = {{{ ;\n", "utf8");
+  const tx = await verifyAndRollback([fp]);
+  assert.equal(tx.broken[0].restored, true);
+  assert.equal(fs.readFileSync(fp, "utf8"), "export const a = 1;\n");
 });
 
 test("apply-tx: JSON 坏掉也能识别", async () => {

@@ -162,7 +162,7 @@ test("user 通道：注入一次后哨兵判重，不重复拼接", async () => 
   cache.put("KERNEL-BODY");
   const state = installUserChannel(ctx, { compose: () => cache.take(), allowed: () => true });
   assert.equal(state.mounted, true);
-  assert.equal(ctx.handlers.length, 1);
+  assert.equal(ctx.handlers.length, 2); // 普通 + global 双注册
 
   const decision = await ctx.handlers[0]({}, passthrough([{ role: "user", content: "问题" }]));
   assert.match(decision.messages[0].content, /^KERNEL-BODY/);
@@ -238,6 +238,26 @@ test("没有事件总线的宿主：返回 no-events，不抛", () => {
   const state = installUserChannel({}, { compose: () => "x" });
   assert.equal(state.mounted, false);
   assert.equal(state.lastReason, "no-events");
+});
+
+test("首次挂载失败会重试，成功后 mounted=true 并清掉错误", async () => {
+  const ctx = fakeCtx();
+  let fails = 2;
+  const realOn = ctx.on;
+  ctx.on = (event, handler) => {
+    if (fails-- > 0) throw new Error("bus-not-ready");
+    return realOn.call(ctx, event, handler);
+  };
+  const state = installUserChannel(ctx, { compose: () => "KERNEL", allowed: () => true });
+  // 同步挂载（两次注册）都失败 → 落到 microtask / setTimeout 重试
+  assert.equal(state.mounted, false);
+  assert.match(state.mountError, /bus-not-ready/);
+  await new Promise((r) => setTimeout(r, 1700));
+  assert.equal(state.mounted, true);
+  assert.equal(state.attempts >= 2, true);
+  assert.equal(state.listeners >= 1, true);
+  assert.equal(state.mountError, null);
+  state.dispose();
 });
 
 test("describeInjection 输出通道与运行证据", () => {
