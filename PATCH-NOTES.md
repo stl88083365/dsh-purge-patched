@@ -478,3 +478,7 @@ rc.3 改写了四处落点，旧 pattern 一条都不命中；只改 pattern，�
 - `node --check` 全过；单测 117/117；`npm test` 脚本改为 `node --test test/*.test.js`
   （`node --test test/` 在 Node 22 上会把目录当模块解析）。
 - 宿主启动正常（6 个进程，无新 crash 日志）。
+### 补充：#77 同因退役
+
+`REWIND_DROP_SENT_ON_APPEND`（#77）打在同一个 `client.js` 的 `append(record)` 输入管线上，
+rc.3 的压缩构建里该方法整段不存在，与 #56 一起退役。有效补丁数 87 → 85。
