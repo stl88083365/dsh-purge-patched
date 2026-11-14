@@ -482,77 +482,115 @@ rc.3 改写了四处落点，旧 pattern 一条都不命中；只改 pattern，�
 
 `REWIND_DROP_SENT_ON_APPEND`（#77）打在同一个 `client.js` 的 `append(record)` 输入管线上，
 rc.3 的压缩构建里该方法整段不存在，与 #56 一起退役。有效补丁数 87 → 85。
-## 1.2.5 / 状态口径修正（2026-11-14）
+
+## 1.2.5 / 状态口径修正（2026-11-14，已被 1.2.6 取代）
 
 页面报「提示词 1 条未应用、代码 2 条未应用」，逐条查清后不是漏打，而是两条口径问题：
 
-- **#71 LIANGSHEN_IDENTITY_LINE（提示词）**：本机 ~/.dsh/.agent-presets 下只有 edteam，
-  没装梁神（@linxin666/dsh-liangshen）预设，四条候选路径全缺 → 原来记 missing_file，
-  状态页把它算成「未应用」。新增 
-aWhenNoTarget: true：目标组件没装时按 
-a 结算，
-  装上后 liangshenPresetFiles() 的目录发现会命中并自动变成 pplied。
+- **#71 LIANGSHEN_IDENTITY_LINE（提示词）**：本机原先没有装梁神预设，四条候选路径全缺，
+  记为 missing_file；而 missing_file 在 patchStatusReady 里算「就绪」，前端标签却按
+  未应用画，看着像没打。
 - **#56 / #77（代码）**：不是没打上，是官方 rc.3 已把「回退(rewind)」实现整块移除 ——
-  客户端压缩构建里 ewindVisibleEntries / isRewindMarker / ppend(record) 管线都不在，
-  宿主侧也不再产生 ewind-* 标记（全包检索只剩本插件自己注入的那几行）。
+  客户端压缩构建里 rewindVisibleEntries / isRewindMarker / append(record) 管线都不在，
+  宿主侧也不再产生 rewind-* 标记（全包检索只剩本插件自己注入的那几行）。
   没有可打的对象，属归档。原来状态记 off，前端 statusKind() 把 off 归到 "miss"、
   标签用 status.skipped（跳过），所以看起来像「未应用」。
 
 ### 改法
 
-- lib/core.js：新增状态 etired（pplyPatches / patchStatus 两条路径都改），
+- lib/core.js：新增状态 retired（applyPatches / patchStatus 两条路径都改），
   patchStatusReady、ALWAYS_SOFT_STATUSES、DISPLAY_SKIP、patches_obsolete 一并纳入；
-  ollupPatchStatus() 增加 
-aWhenNoTarget 形参，#71 声明该字段。
-- client.js：etired → statusKind 归 ok（不再算 miss），标签新增
+  rollupPatchStatus() 增加 naWhenNoTarget 形参，#71 声明该字段。
+- client.js：retired → statusKind 归 ok（不再算 miss），标签新增
   status.retired（中文「官方已移除」/英文「Removed upstream」）。
-- in/dsh-purge.js：汇总行改「已归档（官方已移除该功能，无需再打）」，逐条标签同步；
-  
-a 显式标「本端不需要」。
-- 	est/patch-status.test.js：补一条 
-aWhenNoTarget 用例。
+- bin/dsh-purge.js：汇总行改「已归档（官方已移除该功能，无需再打）」，逐条标签同步；
+  na 显式标「本端不需要」。
+- test/patch-status.test.js：补一条 naWhenNoTarget 用例。
 
 ### 结果
 
-- --status：补丁 78/85 已清洗, 0 待清洗, 2 已归档（官方已移除）；#71 = 
-a，#56/#77 = etired。
+- --status：补丁 78/85 已清洗, 0 待清洗, 2 已归档（官方已移除）；#71 = na，#56/#77 = retired。
 - 审计：patches 85 / gaps [] / syntaxErrors 0 / duplicates 0。
 - 单测 118/118。
+
+> 这一版只改显示口径，被用户否决（「不是修改掉字让客户看不到未应用，而是从根本来执行补丁」），
+> 于是有了 1.2.6。
+
 ## 1.2.6 / 梁神集成 + 根上删除 #56/#77（2026-11-14）
 
-1.2.5 只是把 
-a / etired 摆到状态页上，用户明确否决：不许用改字让别人看不到"未应用"，
-要求从根上让补丁真的执行或真的不存在。这一版按这个标准处理：
+按「根上执行，或根上不存在」重做：
 
-### 梁神（@linxin666/dsh-liangshen 0.4.16）真装真打
+### #71 LIANGSHEN_IDENTITY_LINE
 
-- 从 npm 取 0.4.16（tarball 326813 B），装进 ~/.dsh/profiles/desktop/node_modules/@linxin666/dsh-liangshen，
-  并在 profile package.json 同时登记 dependencies 与 dsh.profile.bundles（备份 package.json.bak-liangshen-20261114）。
-- 预设文件 presets/liangshen/agent.cordis.yml 的身份句与本插件锚点逐字一致（L90–93），
-  所以 --apply 直接把 You are a helpful software engineer assistant. 那行删掉，
-  写入 # [dsh-purge] liangshen identity line removed；复查：marker 存在、原句已无。
-- **#28 LIANGSHEN_PHASE1_KEEP_INJECT 重定向**：0.1.x–0.3.x 把 persona 白名单写在
-  	ool-bootstrap.mjs，0.4.x 搬到 presets/liangshen/minimal-prompt.mjs（PERSONA_SECTION_NAMES
-  从 
-ew Set 改成数组常量，ilter 改成 keep.has(...)）。补丁补上 0.4.x 两条 pattern，
+- 从 npm 取 @linxin666/dsh-liangshen 0.4.16，装进 profiles/desktop/node_modules，
+  并在 profile package.json 同时登记 dependencies 与 dsh.profile.bundles
+  （改前备份 package.json.bak-liangshen-20261114）。
+- presets/liangshen/agent.cordis.yml L90–93 的 `You are a helpful software engineer assistant.`
+  与锚点逐字一致，--apply 删掉该句并写入 `# [dsh-purge] liangshen identity line removed`。
+  复查：marker 存在、原句已无 → #71 真正 applied，不再靠 na 兜底。
+
+### #28 LIANGSHEN_PHASE1_KEEP_INJECT
+
+- 0.1.x–0.3.x 把 persona 白名单写在 tool-bootstrap.mjs；0.4.x 搬到
+  presets/liangshen/minimal-prompt.mjs（PERSONA_SECTION_NAMES 由 new Set 改成数组常量，
+  filter 改成 keep.has(...)）。补丁补上 0.4.x 的两条 pattern，
   listLiangshenBootstrapFiles() 同时收两个文件名。
-- **发现门槛修复**：listLiangshenBootstrapFiles() 原来用 keepSurfaceFile()（只看
-  detectSurface()）。CLI 在 web 面 apply 桌面树时会把 profiles\desktop 整个判成越界 →
-  #28 永远"文件缺失"。改成 llowTargetForPatch()（认本次正在清洗的 aiBase）后命中。
-- 实测：--apply → ✓ 已清洗 patch #28，
-ode --check minimal-prompt.mjs 退出 0。
+- 发现门槛修复：原实现用 keepSurfaceFile()（只看 detectSurface()），CLI 在 web 面 apply
+  桌面树时会把 profiles\desktop 整个判成越界 → #28 永远「文件缺失」。
+  改成 allowTargetForPatch()（认本次正在清洗的 aiBase）后命中。
+- 实测：--apply → ✓ 已清洗 #28，node --check minimal-prompt.mjs 退出 0。
 
 ### #56 / #77 从根上删除定义
 
-- 再扫一遍 rc.3 全树：@deepseek-ai 下 ewind 只剩本插件自己注入的两行（dsh-session L223、
-  dsh-tool-todo L90）；客户端压缩构建里 ewindVisibleEntries / isRewindMarker /
-  ppend(record) 输入管线全部不存在，没有任何等价实现。
-- 结论：这两条补丁的对象不存在，正确的"根上处理"是删除定义，而不是换个状态词继续挂在表里。
+- 再扫一遍 rc.3 全树：@deepseek-ai 下 rewind 只剩本插件自己注入的两行
+  （dsh-session L223、dsh-tool-todo L90）；客户端压缩构建里 rewindVisibleEntries /
+  isRewindMarker / append(record) 输入管线全部不存在，没有任何等价实现。
+- 结论：对象不存在，正确的根上处理是删除定义，而不是换个状态词继续挂在表里。
   #56 / #77 整块从 lib/core.js 删除（备份 lib/core.js.bak-before-drop-56-77）；
-  单测里原来的 #77 锚点用例改成"#56/#77 不得存在于补丁表"的守卫用例。
+  单测里原来的 #77 锚点用例改成「#56 / #77 不得存在于补丁表」的守卫用例。
 
 ### 结果（0.2.2-rc.3 + 梁神 0.4.16）
 
-- --status：补丁 69/85 已清洗, 0 待清洗，无"未应用"条目，无"已归档"条目。
-- 审计：patches 85 / 	ouchedFiles 55 / eps 345 / gaps [] / syntaxErrors 0 / duplicates 0。
+- --status：补丁 69/85 已清洗, 0 待清洗，无「未应用」条目，无「已归档」条目。
+- 审计：patches 85 / touchedFiles 55 / reps 345 / gaps [] / syntaxErrors 0 / duplicates 0。
 - 单测 118/118。
+- 提交 b6f7632 已推 main。
+
+## 1.2.7 / 梁神随包分发（安装即自带）
+
+1.2.6 是手工把梁神落进 profile，换台机器或重装 profile 就没了。这一版把梁神并进仓库本身：
+
+### 合并方式
+
+- 仓库新增 vendor/liangshen/：上游 npm 包 0.4.16 的运行时部分
+  （lib / presets / locale / package.json / cordis.patch.yml / icon.svg / LICENSE / README，
+  去掉 .map、src、tools），43 个文件 ≈ 545 KB；上游 LICENSE 原样保留，
+  NOTICE 增加「Bundled liangshen preset」署名段；package.json 的 files 字段带上 vendor/liangshen。
+- 新增 lib/liangshen-vendor.js：
+  - liangshenVendorRoot() / liangshenVendorVersion()：定位仓库内副本、读版本；
+  - ensureLiangshenProfile(profileDir)：版本不一致或缺文件才镜像 vendor 到
+    <profile>/node_modules/@linxin666/dsh-liangshen，然后登记 dependencies + bundles；
+  - 镜像后立刻对「刚装进去的那份副本」定向打 #71（agent.cordis.yml）与 #28
+    （minimal-prompt.mjs）。pattern 还是 core 里那一份定义，不另写；
+    定向打而不是走 targetFiles 的 surface 门槛，否则给非当前 surface 的 profile
+    （桌面端装配 web 面）会被判越界、补丁不落。
+  - 已是最新且文件齐备时什么都不做（二次运行 installed=false，无写盘）。
+- lib/profile-insert.js：ensureAllProfileInstall() 在 bundles + insert + pnpm 之后
+  增加 liangshen 一步，结果并入返回值（liangshen: {ok, installed, version, registration, patched}）。
+  这是插件启动时那条自愈路径，所以「装上 dsh-purge 就有梁神」由宿主启动自动完成。
+
+### 安装测试（模拟全新安装）
+
+1. 把 profiles/desktop 与 profiles/web 的 @linxin666/dsh-liangshen 移走，
+   并从各自 package.json 摘掉 dependencies 与 bundles 登记；
+2. 直接调用 ensureAllProfileInstall(~/.dsh)（与宿主启动同一入口）；
+3. 结果：两个 profile 都重新装上 0.4.16、登记回 dependencies+bundles、
+   #71/#28 均返回 applied（changed 各 2 个文件）；复查 marker71=true、
+   身份句残留=false、marker28=true；
+4. 再跑一次：installed=false、registration.wrote=false、patched 为空 —— 幂等，不重复写盘。
+
+### 其他
+
+- test/vendor-liangshen.test.js：守卫 vendor 目录齐备、files 字段带 vendor/liangshen、
+  NOTICE 有上游署名、装配模块可导入；单测 122/122。
+- 版本 1.2.7。

@@ -14,3 +14,14 @@ unchanged. The MIT copyright and permission notice is retained verbatim in
 docs/redteam-upstream-LICENSE; dual-use declaration in docs/redteam-upstream-DISCLOSURE.
 These files are prose instructions for operating tools the user installs themselves;
 they are intended solely for authorized security assessment.
+
+## Bundled liangshen preset (vendor/liangshen)
+
+vendor/liangshen/ is the runtime part (lib, presets, locale, package metadata, LICENSE)
+of the npm package @linxin666/dsh-liangshen 0.4.16 by linxin666
+(https://www.npmjs.com/package/@linxin666/dsh-liangshen,
+source repository: https://github.com/zhu1090093659/dsh-web-ui), Apache License 2.0.
+Redistributed here unmodified except for source maps, src/ and tools/, which are not
+shipped. Upstream LICENSE is kept at vendor/liangshen/LICENSE. dsh-purge copies this
+tree into the active profile at startup and then applies its own "liangshen" patches
+(identity line removal, phase-1 injected-section retention) to the copied files.
