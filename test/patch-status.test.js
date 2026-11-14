@@ -59,6 +59,11 @@ test("rollupPatchStatus: 文件全缺 → missing_file", () => {
   assert.equal(rollupPatchStatus({ ...base, missing: 1 }), "missing_file");
 });
 
+test("rollupPatchStatus: 目标组件没装（naWhenNoTarget）→ na，不报未应用", () => {
+  // #71 梁神预设：没装就是本机没有这个对象，不是"缺文件失败"。
+  assert.equal(rollupPatchStatus({ ...base, missing: 1, naWhenNoTarget: true }), "na");
+});
+
 test("rollupPatchStatus: 撤销型自标记补丁无痕迹 → already（目标状态已达成，不是 skipped）", () => {
   // #80 这类"撤掉本插件以前加进去的东西"的补丁，宿主里本来就没有痕迹时，
   // 正确状态是"无需再动"，不能显示成 skipped。

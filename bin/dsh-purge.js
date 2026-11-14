@@ -27,7 +27,7 @@ function printStatus(state) {
   out.push("");
   const effectiveTotal = core.ALL_PATCHES.length - (state.patches_obsolete || 0);
   out.push(`  补丁 ${state.patches_applied}/${effectiveTotal} 已清洗, ${state.patches_pending} 待清洗`
-    + (state.patches_obsolete ? `, ${state.patches_obsolete} 已退役` : "")
+    + (state.patches_obsolete ? `, ${state.patches_obsolete} 已归档（官方已移除）` : "")
     + (state.patches_drifted ? `, ${state.patches_drifted} 漂移（官方原文已改，需更新 pattern）` : ""));
   if (state.host_version) {
     const compat = state.host_supported === false ? `  ← 未适配：插件声明 ${state.host_target || "?"}` : "";
@@ -78,7 +78,7 @@ async function main() {
     });
     for (const h of hosts) console.log(`  宿主 / host → ${h.aiBase}`);
     for (const r of report) {
-      const m = r.status === "applied" ? "✓ 已清洗" : r.status === "already" ? "- 已是最新" : r.status === "missing_file" ? "⚠ 文件缺失" : r.status === "off" ? "- 已退役（官方已删目标实现）" : `✗ ${r.status}`;
+      const m = r.status === "applied" ? "✓ 已清洗" : r.status === "already" ? "- 已是最新" : r.status === "missing_file" ? "⚠ 文件缺失" : r.status === "na" ? "- 本端不需要" : r.status === "off" || r.status === "retired" ? "- 已归档（官方已移除该功能，无需再打）" : `✗ ${r.status}`;
       console.log(`  ${m} patch #${String(r.patch_id).padEnd(2)} ${r.name}`);
     }
     const flashHost = hosts[0]?.aiBase || state.ai_base;

@@ -199,6 +199,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"status.unmatched": "没对上",
 			"status.drifted": "已漂移",
 			"status.skipped": "跳过",
+			"status.retired": "官方已移除",
 			"apply.hint": "没改提示词框不用点保存，默认就是这份，启动和应用会写进 prompt-inject.md。只有自己改过再点保存才会覆盖。点应用打补丁。待应用=原文还在。跳过=当前版本不需要或组件未安装。漂移=官方原文已改，这条补丁没打上，需要更新 pattern。",
 			"flow.title": "清洗流程",
 			"flow.apply": "应用",
@@ -560,6 +561,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"status.unmatched": "No match",
 			"status.drifted": "Drifted",
 			"status.skipped": "Skipped",
+			"status.retired": "Removed upstream",
 			"apply.hint": "If you did not edit the prompt box, do not save. The default is already used and is written to prompt-inject.md on start/apply. Save only after you change it. Apply writes host patches. Pending = original text still present. Skipped = not needed for this version or the component is not installed. Drifted = the official source changed, this patch did not land and its pattern needs an update.",
 			"flow.title": "Clean flow",
 			"flow.apply": "Apply",
@@ -1177,12 +1179,14 @@ body[data-ds-dark-theme] .rt-rep-step-no,.dshp-dock[data-theme="dusk"] .rt-rep-s
 			if (st === "unmatched") return "bad";
 			if (st === "drifted") return "bad";
 			if (st === "na") return "ok";
+			if (st === "retired") return "ok";
 			if (st === "missing_file" || st === "skipped" || st === "unlocated" || st === "off") return "miss";
 			return "bad";
 		}
 
 		function statusLabel(st, t) {
 			if (st === "applied" || st === "already") return t("status.applied");
+			if (st === "retired") return t("status.retired");
 			if (st === "off") return t("status.skipped");
 			if (st === "pending") return t("status.pending");
 			if (st === "unmatched") return t("status.unmatched");

@@ -482,3 +482,39 @@ rc.3 改写了四处落点，旧 pattern 一条都不命中；只改 pattern，�
 
 `REWIND_DROP_SENT_ON_APPEND`（#77）打在同一个 `client.js` 的 `append(record)` 输入管线上，
 rc.3 的压缩构建里该方法整段不存在，与 #56 一起退役。有效补丁数 87 → 85。
+## 1.2.5 / 状态口径修正（2026-11-14）
+
+页面报「提示词 1 条未应用、代码 2 条未应用」，逐条查清后不是漏打，而是两条口径问题：
+
+- **#71 LIANGSHEN_IDENTITY_LINE（提示词）**：本机 ~/.dsh/.agent-presets 下只有 edteam，
+  没装梁神（@linxin666/dsh-liangshen）预设，四条候选路径全缺 → 原来记 missing_file，
+  状态页把它算成「未应用」。新增 
+aWhenNoTarget: true：目标组件没装时按 
+a 结算，
+  装上后 liangshenPresetFiles() 的目录发现会命中并自动变成 pplied。
+- **#56 / #77（代码）**：不是没打上，是官方 rc.3 已把「回退(rewind)」实现整块移除 ——
+  客户端压缩构建里 ewindVisibleEntries / isRewindMarker / ppend(record) 管线都不在，
+  宿主侧也不再产生 ewind-* 标记（全包检索只剩本插件自己注入的那几行）。
+  没有可打的对象，属归档。原来状态记 off，前端 statusKind() 把 off 归到 "miss"、
+  标签用 status.skipped（跳过），所以看起来像「未应用」。
+
+### 改法
+
+- lib/core.js：新增状态 etired（pplyPatches / patchStatus 两条路径都改），
+  patchStatusReady、ALWAYS_SOFT_STATUSES、DISPLAY_SKIP、patches_obsolete 一并纳入；
+  ollupPatchStatus() 增加 
+aWhenNoTarget 形参，#71 声明该字段。
+- client.js：etired → statusKind 归 ok（不再算 miss），标签新增
+  status.retired（中文「官方已移除」/英文「Removed upstream」）。
+- in/dsh-purge.js：汇总行改「已归档（官方已移除该功能，无需再打）」，逐条标签同步；
+  
+a 显式标「本端不需要」。
+- 	est/patch-status.test.js：补一条 
+aWhenNoTarget 用例。
+
+### 结果
+
+- --status：补丁 78/85 已清洗, 0 待清洗, 2 已归档（官方已移除）；#71 = 
+a，#56/#77 = etired。
+- 审计：patches 85 / gaps [] / syntaxErrors 0 / duplicates 0。
+- 单测 118/118。
