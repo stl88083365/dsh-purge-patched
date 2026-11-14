@@ -37,3 +37,20 @@ test("liangshen-vendor: 装配入口可导入且导出两项能力", async () =>
   assert.equal(mod.LIANGSHEN_PKG, "@linxin666/dsh-liangshen");
   assert.match(mod.liangshenVendorVersion(), /^\d+\.\d+\.\d+/);
 });
+
+/* ---------------------------------------------------------------------------
+ * 镜像后必须把梁神这条链上的补丁全打掉，否则插件页会留下"待处理"行
+ * （#24 preset fetch 启用就是这么冒出来的）。
+ */
+test("liangshen-vendor: 装配时覆盖 #24 / #28 / #71 三条", async () => {
+  const mod = await import("file:///" + path.join(repoRoot, "lib", "liangshen-vendor.js").replace(/\\/g, "/"));
+  const ids = mod.LIANGSHEN_PATCH_TARGETS.map((row) => row[0]);
+  for (const id of [24, 28, 71]) {
+    assert.equal(ids.includes(id), true, `装配清单缺 #${id}`);
+  }
+  const presetTargets = mod.LIANGSHEN_PATCH_TARGETS
+    .filter((row) => row[1].join("/") === "presets/liangshen/agent.cordis.yml")
+    .map((row) => row[0]);
+  assert.equal(presetTargets.includes(24), true);
+  assert.equal(presetTargets.includes(71), true);
+});

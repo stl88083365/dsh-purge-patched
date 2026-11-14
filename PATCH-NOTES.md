@@ -594,3 +594,48 @@ rc.3 的压缩构建里该方法整段不存在，与 #56 一起退役。有效�
 - test/vendor-liangshen.test.js：守卫 vendor 目录齐备、files 字段带 vendor/liangshen、
   NOTICE 有上游署名、装配模块可导入；单测 122/122。
 - 版本 1.2.7。
+
+## 1.2.8 / preset fetch 归位 + 客户端审计（2026-11-14）
+
+### 待处理「preset fetch 启用」的根因与修法
+
+- 现象：插件页还剩一条「待处理 preset fetch 启用」（#24 PRESET_FETCH_ENABLED）。
+- 根因：vendor 里的梁神预设是上游原样 `fetch: false`；1.2.7 的装配只打了 #71 与 #28，
+  #24 没进装配清单。副本是你手工 apply 过的所以本机看着已清洗，但只要重新镜像
+  （换机、重装 profile、升级 vendor）就留下一条待处理。
+- 修法：lib/liangshen-vendor.js 把装配清单扩成 #24 / #71 / #28 三条，
+  同一份 agent.cordis.yml 依次打 #24 与 #71，minimal-prompt.mjs 打 #28；
+  清单导出为 LIANGSHEN_PATCH_TARGETS，单测守卫「三条必须在清单里」。
+- 实测：两个 profile 副本的预设现在是 `fetch: true` + `# [dsh-purge] preset fetch enabled`，
+  `--status` 里 #24 = applied，待清洗 0。
+
+### 客户端审计（按 pure 的逻辑找同类缺口）
+
+检查对象与结论：
+
+- dsh-client-ui-plugin-manager / dsh-client-ui-plugin-market：无 verified / trusted /
+  whitelist / allowlist / signature / not-signed 这类第三方准入判断，
+  blocked / disabled 命中都是普通 UI 状态，不需要补丁。
+- dsh-client-ui-agent-preset：只有一处 "verified" 属于表单校验文案，预设注册不看来源，
+  自定义预设与第三方预设都能进下拉。
+- dsh-client-ui-permission-presets / dsh-client-ui-approval：权限档位与审批弹窗里没有
+  额外硬门槛，沙箱/审批的实际行为在宿主侧，已由 #61 / #62 覆盖。
+- dsh-client-ui-model-selection / dsh-client-ui-settings-models：没有模型白名单
+  （officialOnly / isOfficialModel / unsupported model 均 0 命中），自填 API Key 与
+  自定义 baseUrl 都开着；命中「官方模型」的只是首次配置页的说明文案。
+- dsh-client-ui-settings-web-search：fetch/search 的 provider 表按 providerId 分组，
+  没有强制关闭 fetch 的分支；预设里 `fetch: false` 是唯一会关掉抓取的地方，
+  也就是 #24 负责的那处。
+- 审计脚本复核：#40 COMPLETE_PROMPT_KEEP_INJECT 的 dsh-system-prompt/lib/index.js
+  里 6 处 `[dsh-purge]` 标记在位（guard undefined section text / identity stripped /
+  keep sections），审计里的 NOT_APPLIED 是它按「每条 replacement 是否命中」记的账，
+  不是漏打；`gaps []`、`syntaxErrors 0`、`duplicates 0`。
+- #80 MINIMAL_OFFICIAL_TOOLSET 在 rc.3 上 skipped 是预期状态：官方 minimal 预设本来
+  就没有 fs/web 工具行，没有可撤的追加块。
+
+结论：客户端没有新的必须修改项；本轮唯一真缺口是 #24 落在装配链之外，已补进装配链并加守卫。
+
+### 结果
+
+- 单测 123/123（新增 1 条装配清单守卫）。
+- 版本 1.2.8。
