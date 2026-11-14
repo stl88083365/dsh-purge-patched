@@ -190,22 +190,11 @@ test("applyReplacementsToText: 没有残留 pattern 时 changed=false", () => {
   assert.equal(r.text, "hello world");
 });
 
-test("#77 锚点容错：官方在中间插一行也照样命中，且二次应用不叠加", () => {
-  const p77 = ALL_PATCHES.find((p) => p.id === 77);
-  assert.ok(p77, "找不到 #77");
-  // 0.2.1-rc.2 起的官方原文：中间多了一行 revised.clear()
-  const host =
-    "\t\t\tappend(record) {\n" +
-    "\t\t\t\tconst event = record.event;\n" +
-    "\t\t\t\tif (this.inputs.has(event.seq)) return \"none\";\n" +
-    "\t\t\t\tif (this.revised.size > 0) this.revised.clear();\n" +
-    "\t\t\t\tthis.inputs.set(event.seq, record);\n";
-  const once = applyReplacementsToText(host, p77, "");
-  assert.equal(once.changed, true, "rc.2 的原文应当命中");
-  assert.ok(once.text.includes("isRewindMarker(event)"), "应当注入回退判断");
-  assert.ok(once.text.includes("if (this.revised.size > 0) this.revised.clear();"), "官方那行必须原样保留");
-  const twice = applyReplacementsToText(once.text, p77, "");
-  assert.equal(twice.text, once.text, "二次应用不得再插一遍");
+test("#56/#77 已随官方移除回退实现而删除定义", () => {
+  // 0.2.2-rc.3 起客户端压缩构建与宿主侧都不再有回退(rewind)实现，
+  // 补丁没有可打的对象，定义整体删除（不是改状态文案）。
+  assert.equal(ALL_PATCHES.some((p) => p.id === 56), false, "#56 应已删除");
+  assert.equal(ALL_PATCHES.some((p) => p.id === 77), false, "#77 应已删除");
 });
 
 /* ---------------------------------------------------------------------------

@@ -518,3 +518,41 @@ aWhenNoTarget 用例。
 a，#56/#77 = etired。
 - 审计：patches 85 / gaps [] / syntaxErrors 0 / duplicates 0。
 - 单测 118/118。
+## 1.2.6 / 梁神集成 + 根上删除 #56/#77（2026-11-14）
+
+1.2.5 只是把 
+a / etired 摆到状态页上，用户明确否决：不许用改字让别人看不到"未应用"，
+要求从根上让补丁真的执行或真的不存在。这一版按这个标准处理：
+
+### 梁神（@linxin666/dsh-liangshen 0.4.16）真装真打
+
+- 从 npm 取 0.4.16（tarball 326813 B），装进 ~/.dsh/profiles/desktop/node_modules/@linxin666/dsh-liangshen，
+  并在 profile package.json 同时登记 dependencies 与 dsh.profile.bundles（备份 package.json.bak-liangshen-20261114）。
+- 预设文件 presets/liangshen/agent.cordis.yml 的身份句与本插件锚点逐字一致（L90–93），
+  所以 --apply 直接把 You are a helpful software engineer assistant. 那行删掉，
+  写入 # [dsh-purge] liangshen identity line removed；复查：marker 存在、原句已无。
+- **#28 LIANGSHEN_PHASE1_KEEP_INJECT 重定向**：0.1.x–0.3.x 把 persona 白名单写在
+  	ool-bootstrap.mjs，0.4.x 搬到 presets/liangshen/minimal-prompt.mjs（PERSONA_SECTION_NAMES
+  从 
+ew Set 改成数组常量，ilter 改成 keep.has(...)）。补丁补上 0.4.x 两条 pattern，
+  listLiangshenBootstrapFiles() 同时收两个文件名。
+- **发现门槛修复**：listLiangshenBootstrapFiles() 原来用 keepSurfaceFile()（只看
+  detectSurface()）。CLI 在 web 面 apply 桌面树时会把 profiles\desktop 整个判成越界 →
+  #28 永远"文件缺失"。改成 llowTargetForPatch()（认本次正在清洗的 aiBase）后命中。
+- 实测：--apply → ✓ 已清洗 patch #28，
+ode --check minimal-prompt.mjs 退出 0。
+
+### #56 / #77 从根上删除定义
+
+- 再扫一遍 rc.3 全树：@deepseek-ai 下 ewind 只剩本插件自己注入的两行（dsh-session L223、
+  dsh-tool-todo L90）；客户端压缩构建里 ewindVisibleEntries / isRewindMarker /
+  ppend(record) 输入管线全部不存在，没有任何等价实现。
+- 结论：这两条补丁的对象不存在，正确的"根上处理"是删除定义，而不是换个状态词继续挂在表里。
+  #56 / #77 整块从 lib/core.js 删除（备份 lib/core.js.bak-before-drop-56-77）；
+  单测里原来的 #77 锚点用例改成"#56/#77 不得存在于补丁表"的守卫用例。
+
+### 结果（0.2.2-rc.3 + 梁神 0.4.16）
+
+- --status：补丁 69/85 已清洗, 0 待清洗，无"未应用"条目，无"已归档"条目。
+- 审计：patches 85 / 	ouchedFiles 55 / eps 345 / gaps [] / syntaxErrors 0 / duplicates 0。
+- 单测 118/118。
