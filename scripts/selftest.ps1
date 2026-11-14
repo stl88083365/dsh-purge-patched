@@ -1,60 +1,75 @@
-param([int]$WaitSec = 0)
+﻿param([int]$WaitSec = 0)
+# dsh-purge post-restart self test.
+# Finds the host's local port, reads /dsh-purge/status (injection_state), then runs verify-inject.
+# Pure ASCII on purpose: Windows PowerShell 5.1 decodes BOM-less UTF-8 as ANSI and breaks on CJK.
+
 $ErrorActionPreference = "Continue"
 if ($WaitSec -gt 0) { Start-Sleep -Seconds $WaitSec }
 
-$report = @()
-$report += "# dsh-purge 重启自测 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-$report += ""
+$lines = New-Object System.Collections.Generic.List[string]
+function Add-Line([string]$s) { $lines.Add($s) }
 
-# 1) 找宿主监听的 127.0.0.1 端口（桌面/ web 都可能换端口，不写死）
-$pids = (Get-Process | Where-Object { $_.ProcessName -like "*DeepSeek*" }).Id
+Add-Line "# dsh-purge selftest $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+Add-Line ""
+
+$pids = @((Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like "*DeepSeek*" }).Id)
+Add-Line ("host pids: " + ($pids -join ","))
+
 $ports = @()
 try {
-  $ports = Get-NetTCPConnection -State Listen -ErrorAction Stop |
-    Where-Object { $pids -contains $_.OwningProcess -and $_.LocalAddress -in @("127.0.0.1","0.0.0.0","::") } |
-    Select-Object -ExpandProperty LocalPort -Unique
-} catch { }
-$report += "宿主 PID: $($pids -join ',')  监听端口: $($ports -join ',')"
+  $ports = @(Get-NetTCPConnection -State Listen -ErrorAction Stop |
+    Where-Object { $pids -contains $_.OwningProcess } |
+    Select-Object -ExpandProperty LocalPort -Unique)
+} catch {
+  Add-Line ("port scan failed: " + $_.Exception.Message)
+}
+Add-Line ("listen ports: " + ($ports -join ","))
 
 $status = $null
 foreach ($p in $ports) {
-  foreach ($path in @("/dsh-purge/status")) {
-    try {
-      $r = Invoke-WebRequest -Uri "http://127.0.0.1:$p$path" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
-      if ($r.StatusCode -eq 200) { $status = $r.Content | ConvertFrom-Json; $report += "命中状态路由: http://127.0.0.1:$p$path"; break }
-    } catch { }
-  }
-  if ($status) { break }
+  try {
+    $r = Invoke-WebRequest -Uri ("http://127.0.0.1:" + $p + "/dsh-purge/status") -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+    if ($r.StatusCode -eq 200) {
+      $status = $r.Content | ConvertFrom-Json
+      Add-Line ("status route: http://127.0.0.1:" + $p + "/dsh-purge/status")
+      break
+    }
+  } catch { }
 }
 
 if (-not $status) {
-  $report += "没找到插件状态路由（宿主可能没起 web 服务），只能跑日志取证。"
+  Add-Line "no /dsh-purge/status route found (host may not serve web)"
 } else {
-  $report += ""
-  $report += "## 插件状态"
-  $report += "- plugin_version: $($status.plugin_version)"
-  $report += "- host_version: $($status.host_version)  supported=$($status.host_supported)  surface_mode=$($status.surface_mode)"
-  $report += "- patches: applied=$($status.patches_applied) pending=$($status.patches_pending) drifted=$($status.patches_drifted) total=$($status.patches_total)"
-  $report += "- injection_mode: $($status.injection_mode)  requested=$($status.injection_requested)"
-  $report += "- injection_reason: $($status.injection_reason)"
+  Add-Line ""
+  Add-Line "## plugin status"
+  Add-Line ("- plugin_version: " + $status.plugin_version)
+  Add-Line ("- host_version: " + $status.host_version + "  supported=" + $status.host_supported + "  surface_mode=" + $status.surface_mode)
+  Add-Line ("- patches: applied=" + $status.patches_applied + " pending=" + $status.patches_pending + " drifted=" + $status.patches_drifted + " total=" + $status.patches_total)
+  Add-Line ("- injection_mode: " + $status.injection_mode + "  requested=" + $status.injection_requested)
+  Add-Line ("- injection_reason: " + $status.injection_reason)
   if ($status.injection_state) {
     $s = $status.injection_state
-    $report += "- user 通道: mounted=$($s.mounted) attempts=$($s.attempts) injected=$($s.injected) skipped=$($s.skipped) last=$($s.lastReason) mountError=$($s.mountError)"
+    Add-Line ("- user channel: mounted=" + $s.mounted + " listeners=" + $s.listeners + " attempts=" + $s.attempts + " injected=" + $s.injected + " skipped=" + $s.skipped + " last=" + $s.lastReason + " mountError=" + $s.mountError)
+    if ($s.mounted -and $s.injected -eq 0) {
+      Add-Line "- NOTE: mounted but injected=0 -> send one message in the UI, then run this script again."
+    }
   } else {
-    $report += "- user 通道: 状态字段缺失（插件不是 1.2.3+，或 apply 未跑）"
+    Add-Line "- user channel: injection_state missing (plugin older than 1.2.3, or apply not loaded)"
   }
 }
 
-# 2) 日志取证
 $d = Join-Path $env:USERPROFILE ".dsh\profiles\desktop\node_modules\dsh-purge"
-$report += ""
-$report += "## 会话日志取证"
+Add-Line ""
+Add-Line "## session log evidence"
 try {
-  $out = & node "$d\scripts\verify-inject.mjs" --all --limit 3 2>&1
-  $report += ($out | Out-String)
-} catch { $report += "verify-inject 失败: $($_.Exception.Message)" }
+  $out = & node (Join-Path $d "scripts\verify-inject.mjs") --all --limit 3 2>&1
+  foreach ($o in $out) { Add-Line ([string]$o) }
+} catch {
+  Add-Line ("verify-inject failed: " + $_.Exception.Message)
+}
 
 $file = Join-Path $env:USERPROFILE "dsh-purge-selftest-report.md"
-$report -join "`n" | Set-Content -LiteralPath $file -Encoding utf8
-Write-Host ($report -join "`n")
-Write-Host "`n报告已写入: $file"
+$lines -join "`n" | Set-Content -LiteralPath $file -Encoding UTF8
+Write-Host ($lines -join "`n")
+Write-Host ""
+Write-Host ("report: " + $file)

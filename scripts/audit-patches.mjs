@@ -77,6 +77,8 @@ const patchRows = [];
 const touched = new Set();
 
 for (const p of ALL_PATCHES) {
+  // 已退役补丁（官方删掉了目标实现）不参与审计
+  if (p.obsolete) continue;
   const keys = Array.isArray(p.file) ? p.file : [p.file];
   const fileRows = [];
   for (const aiBase of aiBases) {

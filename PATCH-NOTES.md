@@ -431,3 +431,50 @@ Select-String "C:\Users\lbxp\.dsh\profiles\desktop\node_modules\dsh-purge\lib\de
 
 `test/inject-channel.test.js` 15 条 + `test/p2-p3.test.js` 14 条，`npm test` 29/29。
 `scripts/audit-patches.mjs`：87 条补丁 / 54 文件 / 338 verdict / gaps 0 / syntaxErrors 0 / duplicates 0。
+
+
+## 1.2.4 / 0.2.2-rc.3 适配（2026-11-14）
+
+### 升级路径（桌面端）
+
+- 上游最新 tag `dsh-v0.2.2-rc.3`（Pre-release，2026-11-13），GitHub 发布页 `assets=0`，
+  桌面安装包只在 electron-updater 的 nightly feed 里：
+  `https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml`。
+- 包名 `deepseek-harness-0.2.2-rc.3-win-x64.exe`，`size=299595752`，sha512 与 feed 逐字节一致，
+  Authenticode 签名主体 `Hangzhou DeepSeek Artificial Intelligence Co., Ltd.`。
+- 安装 `DeepSeek Harness.exe /S` 到原目录 `D:\DeepSeek Harness`（产品版本 0.2.2.0）。
+  安装器会删掉解包态的 `resources\app` 目录，并重建 `resources\app.asar`（209021953 B）。
+- 升级后重跑解包：20051 entries / overlay 1666 / asar 改名 aside，再 `--apply` 打补丁。
+- `resources\runtime\primary-runtime` 被安装器清掉 → `npm run fix:runtime` 从
+  `~/.dsh/dsh-runtimes/dsh-primary-runtime` 复制回来（`runtime.json` 598 B + node/python 在位）。
+
+### 漂移修复（4 条 pattern 重定向）
+
+rc.3 改写了四处落点，旧 pattern 一条都不命中；只改 pattern，补丁语义不变：
+
+- **#13 ESCALATION_WIDENING_EXEMPT**：三条守卫从 `throw new Error(...)` 改成
+  `throw new SandboxEscalationError(msg, "SANDBOX_ESCALATION_*")`。
+- **#35 ESCALATION_NEVER_REJECT**：`switch (outcome)` 的 rejected/cancelled/unavailable
+  同样换成带错误码的 throw，cancelled 分支还多了 `approval.signal?.throwIfAborted()`。
+- **#18 REPEAT_TOOL_REMINDER_DISABLED**：`tools/post-execute` 去掉了
+  `downstream.kind === "block"` 分支，下游决策只剩对象形态。
+- **#62 OFFICIAL_TOOL_ASK_FAILOPEN**：deny 统一走 `approvalDenial(msg, CODE)` 工厂，
+  对象里的 `reason` 字段消失，三条 fail-open 分支重写。
+
+### #56 退役（obsolete 语义）
+
+- rc.3 把 `dsh-client-ui-conversation/lib/client.js` 的
+  `rewindVisibleEntries` / `isRewindMarker` 整段删掉（该文件已换成压缩构建，
+  全包检索 `rewind` / `sourceEventSeqs` 命中 0），没有可打的对象。
+- 新增 `obsolete: true`：apply 直接记 `off`，审计跳过该条，不再当成漂移误报。
+  #56 保留在表里作为历史记录，状态页显示为关闭。
+
+### 验证结果（0.2.2-rc.3）
+
+- 审计：`patches 86`（#56 退役）/ `touchedFiles 58` / `reps 369` / `ok 220` /
+  `gaps []` / `needsReview [24,40,80,83]` / `syntaxErrors 0` / `duplicates 0`。
+  - #24/#40/#83 属「前一条写入、后一条改写同一段」的字面重叠，落盘形态已核对正确。
+  - #80 是撤回型补丁，新装的 minimal 预设本来就没有旧注入行，`skipped` 即目标状态。
+- `node --check` 全过；单测 117/117；`npm test` 脚本改为 `node --test test/*.test.js`
+  （`node --test test/` 在 Node 22 上会把目录当模块解析）。
+- 宿主启动正常（6 个进程，无新 crash 日志）。
