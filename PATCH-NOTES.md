@@ -639,3 +639,49 @@ rc.3 的压缩构建里该方法整段不存在，与 #56 一起退役。有效�
 
 - 单测 123/123（新增 1 条装配清单守卫）。
 - 版本 1.2.8。
+
+## 1.2.9 — 文本工具调用被吞 / 任务面板挂 pending
+
+### 现场
+
+桌面端一个会话在第 14 步（19:58）返回的 assistant 消息里没有 tool-call 块，只有一段正文：
+
+```
+<tool_call>
+<function=exec_25>
+<parameter…>拉取生产 face_tracker 到本地
+```
+
+也就是说模型把工具调用写成了 Hermes 风格的文本。DSH 只执行结构化 tool-call，
+于是这一步「没有工具可执行」，直接 `turn/end → completed`：
+界面显示「已完成」，会话进入空闲，而任务面板还留着「1 进行中 · 6 待处理」。
+
+### 根因
+
+- 不是消息没进队列：会话事件里这一步 `stopReason = "stop"`，
+  assistant 只有 reasoning + text 两个块，没有 tool-call 块。
+- 不是上下文超限：该步输入 70867 token、输出 446 token。
+- 是模型在这一跳退回了模板自带的 XML 工具调用格式（会话模型
+  `qwen3.8-flash-next-unsloth-ud-q6_k_xl`，走 openai-completions 网关）。
+  DSH 没有解析这种文本格式的入口，所以调用被当成回复正文落盘。
+
+### 补丁
+
+- **#95 TEXT_TOOLCALL_RESCUE**（agent-loop）：assistant 消息落地时，
+  若没有 tool-call 块而正文里出现 `<tool_call>` / `<function=`，
+  记下 `{turn, step}` 标记，供回合结束兜底使用。
+- **#96 PENDING_TODO_CONTINUE**（agent-loop）：
+  1. 构造时订阅 `session/event` 里的 `todo/write`，记住最近一次任务列表；
+  2. 回合结束、inbox 已空时，若「上一跳是文本工具调用」或「任务列表里还有
+     pending / in_progress」，注入一条 runtime-context followup（`dsh-purge-continue`），
+     要求模型用真实工具重发、并把剩余任务继续做完；
+  3. 上限：默认 2 轮（`globalThis.__dshPurgeContinueCap` 可调，设 0 关闭），
+     10 分钟无续跑自动重置计数，避免空转。
+
+### 结果
+
+- 单测 129/129（新增 6 条：#95/#96 定义、marker、注入内容、上限与幂等）。
+- `--apply` 到宿主：`✓ 已清洗 patch #95`、`✓ 已清洗 patch #96`，
+  `dsh-agent-loop/lib/index.js` 标记在位且 `node --check` exit=0。
+- 版本 1.2.9。重启客户端后生效；对已有 pending 任务，重启后发一句「继续」
+  （或模型下一次写 todo 时）即可接着跑。
